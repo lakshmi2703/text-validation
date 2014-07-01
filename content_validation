@@ -1,0 +1,100 @@
+require 'fileutils'
+require 'yaml'
+require 'nokogiri'
+require 'nokogiri/diff'
+
+input_path = ARGV[0]
+hubxml = ARGV[1]
+output_path = ARGV[2]
+
+class Content_validation	
+    def initialize()      
+      @report_array = []
+    end
+
+	def listFile(path, output)
+		array = []
+		array1 = []
+		mainfile_hash = Hash.new
+		puts "Text Validation Processing ............"
+		Dir.glob(path).each do |subfolder|
+			Dir.glob("#{subfolder}/*/*/*.xml").each do |file|				
+				array << file if (File.basename(file) == 'main_eid.xml')			
+				array1 << file  if (File.basename(file) == 'main1.xml')			
+			end
+			array.zip(array1) { |a,b| mainfile_hash[a.to_sym] = b }		
+		end	
+			mainfile_hash.each do |key, value| 			
+			compare_xml(key.to_s, value.to_s, output)
+		end	
+	end
+
+	def compare_xml(main, main_id, output)
+		file1 = File.open(main)
+		doc1 = Nokogiri::XML(file1)	
+		file2 = File.open(main_id)
+		doc2 = Nokogiri::XML(file2)
+		filename = "remove_text.xml"
+		doc1_hash = Hash.new
+		doc2_hash = Hash.new
+		doc1_array = []
+		doc1.xpath("//*[@epub_id]").map  do |p| 				
+			doc1_hash[p.attr('epub_id')] = {}
+			doc1_hash[p.attr('epub_id')][File.join(File.dirname(file1))] = {}
+			doc1_hash[p.attr('epub_id')][File.join(File.dirname(file1))][p.parent.name] = p.text()
+			doc1_hash[p.attr('epub_id')][File.join(File.dirname(file1))][p.name] = p.text()
+		end
+		doc2.xpath("//*[@epub_id]").map  do |p| 
+			doc2_hash[p.attr('epub_id')] = {}
+			doc2_hash[p.attr('epub_id')][File.join(File.dirname(file2))] = {}
+			doc2_hash[p.attr('epub_id')][File.join(File.dirname(file2))][p.parent.name] = p.text()
+			doc2_hash[p.attr('epub_id')][File.join(File.dirname(file2))][p.name] = p.text()
+		end	
+		diff1 = (doc1_hash.keys - doc2_hash.keys)	
+		group_report(diff1, doc1_hash, filename, output)
+	end
+
+	def group_report(diff1, doc1_hash, filename, output)
+		counter = 0
+		filename, text_value, epub_id, tagname =""		
+		diff1.each do |key|
+			epub_id = key
+			keytext = doc1_hash[key]				
+				keytext.each do |file, value| 				
+					filename = file
+					value.each do |paraname, text| 											
+						if paraname =~ /(book|host|issue|publisher|maintitle|floats|last-page|first-page)/		
+							filename = ""
+						else
+							counter += 1
+							tagname = paraname
+							text_value =text
+							filename = file
+						end
+					end
+				end	
+			@report_array << [tagname, filename, text_value] unless filename.length == 0
+		end
+		generate_report(@report_array,output)				
+	end
+
+	def generate_report(report_array,output)					
+		unless report_array.empty?
+			outfile  = File.join(output, "content_validation.html")
+			fileHtml = File.new(outfile, "w+")
+			fileHtml.puts "<HTML><BODY>"
+			fileHtml.puts "<H1>Validation HTML</H1><br>"
+			fileHtml.puts "<TABLE BORDER='1' ALIGN='center'>"
+			fileHtml.puts "<TR><TH>File Name</TH><TH>Element Name</TH><TH>Missing Text</TH></TR>"				
+			report_array.each do |arr_txt|
+				fileHtml.puts "<TR><TD><a href\=\"#{arr_txt[1]}\">#{arr_txt[1]}</a></TD><TD>#{arr_txt[0]}</TD><TD>#{arr_txt[2]}</TD></TR>"	
+			end
+			fileHtml.puts "</TABLE>"
+			fileHtml.puts "</BODY></HTML>"
+			fileHtml.close()
+		end
+	end
+
+end
+val = Content_validation.new
+val.listFile(input_path, output_path)
