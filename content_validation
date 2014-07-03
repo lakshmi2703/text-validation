@@ -30,31 +30,28 @@ class Content_validation
 	end
 
 	def compare_xml(main, main_id, output)
-		file1 = File.open(main)
-		doc1 = Nokogiri::XML(file1)	
-		file2 = File.open(main_id)
-		doc2 = Nokogiri::XML(file2)
-		filename = "remove_text.xml"
 		doc1_hash = Hash.new
 		doc2_hash = Hash.new
 		doc1_array = []
-		doc1.xpath("//*[@epub_id]").map  do |p| 				
-			doc1_hash[p.attr('epub_id')] = {}
-			doc1_hash[p.attr('epub_id')][File.join(File.dirname(file1))] = {}
-			doc1_hash[p.attr('epub_id')][File.join(File.dirname(file1))][p.parent.name] = p.text()
-			doc1_hash[p.attr('epub_id')][File.join(File.dirname(file1))][p.name] = p.text()
-		end
-		doc2.xpath("//*[@epub_id]").map  do |p| 
-			doc2_hash[p.attr('epub_id')] = {}
-			doc2_hash[p.attr('epub_id')][File.join(File.dirname(file2))] = {}
-			doc2_hash[p.attr('epub_id')][File.join(File.dirname(file2))][p.parent.name] = p.text()
-			doc2_hash[p.attr('epub_id')][File.join(File.dirname(file2))][p.name] = p.text()
-		end	
+		doc1_hash = epub_id("//*[@epub_id]", doc1_hash, main)
+		doc2_hash = epub_id("//*[@epub_id]", doc2_hash, main_id)
 		diff1 = (doc1_hash.keys - doc2_hash.keys)	
-		group_report(diff1, doc1_hash, filename, output)
+		group_report(diff1, doc1_hash, output)
 	end
 
-	def group_report(diff1, doc1_hash, filename, output)
+	def epub_id(expath, doc_hash, filename)
+		file1 = File.open(filename)
+		doc1 = Nokogiri::XML(file1)	
+		doc1.xpath(expath).map  do |p| 				
+			doc_hash[p.attr('epub_id')] = {}
+			doc_hash[p.attr('epub_id')][File.join(File.dirname(file1))] = {}
+			doc_hash[p.attr('epub_id')][File.join(File.dirname(file1))][p.parent.name] = p.text()
+			doc_hash[p.attr('epub_id')][File.join(File.dirname(file1))][p.name] = p.text()
+		end
+		return doc_hash
+	end
+
+	def group_report(diff1, doc1_hash, output)
 		counter = 0
 		filename, text_value, epub_id, tagname =""		
 		diff1.each do |key|
